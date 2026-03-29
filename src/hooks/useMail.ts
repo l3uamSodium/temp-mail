@@ -126,7 +126,11 @@ export function useMail(): UseMailReturn {
     if (!domains || domains.length === 0) {
       throw new Error("No domains available");
     }
-    return domains[0].domain;
+    // Pick a random domain instead of always using the first one.
+    // The first domain is often heavily blacklisted by services,
+    // so this improves the chance of OTPs actually arriving.
+    const randomIdx = Math.floor(Math.random() * domains.length);
+    return domains[randomIdx].domain;
   }, []);
 
   // Create a new account
