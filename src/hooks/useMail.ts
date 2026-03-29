@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import axios, { AxiosError } from "axios";
 
-const API_BASE = "https://api.mail.tm";
+const API_BASE = "https://api.mail.gw";
 const EXPIRY_DURATION_MS = 10 * 60 * 1000; // 10 minutes
 
 export interface MailAccount {
@@ -263,6 +263,7 @@ export function useMail(): UseMailReturn {
           localStorage.setItem("tempmail_token", result.token);
           localStorage.setItem("tempmail_expires_at", expiresAt.toString());
           startExpiryTimer(expiresAt);
+          // Initial fetch is already done manually
           await fetchMessages(result.token);
         }
       } catch (err) {
@@ -293,10 +294,23 @@ export function useMail(): UseMailReturn {
     let eventSource: EventSource | null = null;
     let fallbackInterval: ReturnType<typeof setInterval> | null = null;
 
+    // Helper to start polling if SSE fails
+    const startFallback = () => {
+      if (!fallbackInterval) {
+        // Poll every 3 seconds to ensure fast OTP delivery if SSE fails
+        fallbackInterval = setInterval(() => fetchMessages(token), 3000);
+      }
+    };
+
     // Try to connect via Mercure SSE for real-time updates
     try {
-      const mercureUrl = new URL("https://mercure.mail.tm/.well-known/mercure");
+      const mercureUrl = new URL("https://mercure.mail.gw/.well-known/mercure");
       mercureUrl.searchParams.append("topic", `/accounts/${account.id}`);
+      
+      // Some server configurations accept token via 'authorization' query param
+      // as EventSource does not support custom headers natively.
+      // E.g., 'authorization=Bearer {token}'
+      mercureUrl.searchParams.append("authorization", `Bearer ${token}`);
 
       eventSource = new EventSource(mercureUrl.toString(), {
         withCredentials: false,
@@ -308,31 +322,34 @@ export function useMail(): UseMailReturn {
       };
 
       eventSource.onerror = () => {
-        // SSE failed or disconnected — fallback to polling
+        // SSE failed or disconnected — close and fallback to polling
         if (eventSource) {
           eventSource.close();
           eventSource = null;
         }
-        if (!fallbackInterval) {
-          fallbackInterval = setInterval(() => {
-            fetchMessages(token);
-          }, 3000);
-        }
+        startFallback();
       };
     } catch {
       // SSE not supported — use polling fallback
       eventSource = null;
+      startFallback();
     }
 
-    // Always start a fallback poll at 5s as safety net
-    // (SSE may miss events, and this ensures we always catch up)
-    fallbackInterval = setInterval(() => {
+    // Always ensure at least the fallback is active if we couldn't create SSE
+    if (!eventSource) {
+      startFallback();
+    }
+    
+    // We also do a manual poll interval every 15 seconds even if SSE is active
+    // just to be completely safe and avoid missed updates over long periods.
+    const safetyInterval = setInterval(() => {
       fetchMessages(token);
-    }, 5000);
+    }, 15000);
 
     return () => {
       if (eventSource) eventSource.close();
       if (fallbackInterval) clearInterval(fallbackInterval);
+      clearInterval(safetyInterval);
     };
   }, [token, account, fetchMessages]);
 
