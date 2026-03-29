@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import axios, { AxiosError } from "axios";
 
-const API_BASE = "https://api.mail.gw";
+const API_BASE = "https://api.mail.tm";
 const EXPIRY_DURATION_MS = 10 * 60 * 1000; // 10 minutes
 
 export interface MailAccount {
@@ -297,14 +297,14 @@ export function useMail(): UseMailReturn {
     // Helper to start polling if SSE fails
     const startFallback = () => {
       if (!fallbackInterval) {
-        // Poll every 3 seconds to ensure fast OTP delivery if SSE fails
-        fallbackInterval = setInterval(() => fetchMessages(token), 3000);
+        // Poll every 8 seconds to ensure fast OTP delivery if SSE fails
+        fallbackInterval = setInterval(() => fetchMessages(token), 8000);
       }
     };
 
     // Try to connect via Mercure SSE for real-time updates
     try {
-      const mercureUrl = new URL("https://mercure.mail.gw/.well-known/mercure");
+      const mercureUrl = new URL("https://mercure.mail.tm/.well-known/mercure");
       mercureUrl.searchParams.append("topic", `/accounts/${account.id}`);
       
       // Some server configurations accept token via 'authorization' query param
@@ -364,20 +364,22 @@ export function useMail(): UseMailReturn {
   const createNewAccount = useCallback(async () => {
     setCreating(true);
     setError(null);
-    setMessages([]);
-    setSelectedMessage(null);
-
-    // Clear timer
-    if (timerRef.current) clearInterval(timerRef.current);
 
     try {
-      localStorage.removeItem("tempmail_account");
-      localStorage.removeItem("tempmail_token");
-      localStorage.removeItem("tempmail_expires_at");
-
+      // First, attempt to get a new domain and account BEFORE clearing the old one
+      // This prevents leaving the user in a broken state if the network fails
       const domain = await getDomain();
       const result = await createAccount(domain);
       const expiresAt = Date.now() + EXPIRY_DURATION_MS;
+
+      // If successful, now we can safely clear the old state and start the new one
+      if (timerRef.current) clearInterval(timerRef.current);
+      setMessages([]);
+      setSelectedMessage(null);
+      
+      localStorage.removeItem("tempmail_account");
+      localStorage.removeItem("tempmail_token");
+      localStorage.removeItem("tempmail_expires_at");
 
       setAccount(result.account);
       setToken(result.token);

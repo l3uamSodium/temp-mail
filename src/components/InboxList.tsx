@@ -120,19 +120,14 @@ export default function InboxList({
           </div>
         ) : messages.length === 0 ? (
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
             className="flex flex-col items-center justify-center h-full px-6 text-center"
           >
-            <div className="w-16 h-16 rounded-2xl bg-[white] shadow-md border border-[var(--border)] flex items-center justify-center mb-4 animate-float">
-              <Inbox size={28} className="text-[var(--accent-light)]" />
-            </div>
-            <p className="text-base text-[var(--fg)] font-bold mb-1 tracking-tight">
-              Inbox is empty
-            </p>
-            <p className="text-sm text-[var(--fg-muted)] max-w-[240px] leading-relaxed">
-              Waiting for incoming emails. They will appear here instantly.
+            <RefreshCcw size={40} className="text-[#94a3b8] mb-4" strokeWidth={2.5} style={{ animation: "spin 3s linear infinite" }} />
+            <p className="text-[17px] text-[#64748b] font-medium tracking-wide">
+              Receiving emails....
             </p>
           </motion.div>
         ) : (
